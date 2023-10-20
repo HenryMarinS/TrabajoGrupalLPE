@@ -1,0 +1,171 @@
+---
+title: <font size="10" face="Georgia, Arial" color="dodgerblue">Informe de las gasolineras</font>
+author : <img src="https://cdn-icons-png.flaticon.com/512/8391/8391498.png" width="200" height="200"  style="display:block;margin-left:225px">
+output: 
+  ioslides_presentation: 
+    highlight: kate
+date: <font size="10" face="Georgia, Arial">`r Sys.Date()`</font>
+params:
+    n : Na
+---
+```{css echo = FALSE}
+
+body {
+background-color: silver;}
+
+```
+
+
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = FALSE)
+library(tidyverse)
+library(magrittr)
+library(janitor)
+library(lubridate)
+library(tidyr)
+library(httr)
+library(jsonlite)
+library(ggplot2)
+library(knitr) # to print the table
+library(dplyr) # to sort the data
+library(plotly)
+# CARGA DE DATOS ---------------------------------------------------------
+url_ <- "https://sedeaplicaciones.minetur.gob.es/ServiciosRESTCarburantes/PreciosCarburantes/EstacionesTerrestres/"
+
+f_raw <- jsonlite::fromJSON(url_)
+df_source <- f_raw$ListaEESSPrecio 
+janitor::clean_names(df_source) 
+
+#ver config
+locale() 
+#Cambiamos config
+df1<-df_source %>% janitor::clean_names() %>% type_convert(locale = locale(decimal_mark = ","))
+str_squish(df1$rotulo)
+
+# CREAR NUEVAS VARIABLES ------------------------------------------------
+
+##Clasificamos por gasolineras baratas y no baratas NUEVA COLUMNA
+df2 <- df1 %>% mutate(lowcost =! rotulo %in% c("CEPSA", "REPSOL", "BP", "SHELL"))
+
+#Filtrado por 24 h
+
+df2 %>% count(horario, sort = TRUE)
+no_24h <- df2  %>% mutate('24H' = horario %in% 'L-D: 24H')
+
+##Columna nombre ccaa
+df3 <- df2%>% mutate(df2,ccaa = ifelse (idccaa=="01","ANDALUCIA",ifelse (idccaa=="02","ARAGON", ifelse (idccaa=="03","ASTURIAS", ifelse (idccaa=="04","BALEARES", 
+                                                                                                                                                ifelse (idccaa=="05","CANARIAS",ifelse (idccaa=="06","CANTABRIA", ifelse (idccaa=="07","CASTILLA Y LEON", 
+                                                                                                                                                                                                                   ifelse (idccaa=="08","CASTILLA - LA MANCHA", ifelse (idccaa=="09","CATALUÑA", ifelse (idccaa=="10","COMUNIDAD VALENCIANA",
+                                                                                                                                                                                                                                                                                                                ifelse (idccaa=="11","EXTREMADURA", ifelse (idccaa=="12","GALICIA", ifelse (idccaa=="13","MADRID", ifelse (idccaa=="14","MURCIA", ifelse (idccaa=="15","NAVARRA",
+                                                                                                                                                                                                                                                                                                                                                                                                                                                          ifelse (idccaa=="16","PAIS VASCO", ifelse (idccaa=="17","LA RIOJA",ifelse (idccaa=="18","CEUTA",ifelse (idccaa=="19","MELILLA","NA"))))))))))))))))))))
+##Precio medio del gasoleo en las CCAA
+df4 <- df3 %>% select(precio_gasoleo_a, precio_gasolina_95_e5, idccaa, rotulo, lowcost) %>% drop_na() %>% group_by(idccaa, lowcost) %>% summarize(mean(precio_gasoleo_a), mean(precio_gasolina_95_e5))
+
+```
+
+
+## <FONT COLOR ='skyblue' size ="7" face="Georgia, Arial"> Introducción</FONT>
+<font face="Georgia, Arial">
+En este informe encontrará la información más relevante sobre:
+
+- Gasolineras: rótulo, horario, si es lowcost, etc.
+- Precio del carburante 
+- Población de un lugar concreto
+
+Toda la información proporcionada en este informe ha sido extraida de [aquí](https://sede.serviciosmin.gob.es/)
+
+
+</font>
+
+
+## <FONT COLOR ='skyblue' size ="7" face="Georgia, Arial"> 5 gasolineras más baratas </FONT>
+
+```{r baratas, echo = FALSE}
+
+orden<- params$n %>% arrange(params$n[5])
+
+knitr::kable(head(orden[c(1,3,5,6,7,8)],5),"pipe", align = "l", row.names = FALSE)
+```
+
+## <FONT COLOR ='skyblue' size ="7" face="Georgia, Arial"> 5 gasolineras más caras </FONT>
+
+```{r caras}
+
+orden<- params$n %>% arrange(params$n[5])
+
+knitr::kable(tail(orden[c(1,3,5,6,7,8)],5),"pipe", align = "l", row.names = FALSE)
+```
+
+## <FONT COLOR ='skyblue' size ="7" face="Georgia, Arial"> Estadísticas gasolina</FONT>
+
+<FONT COLOR ='firebrick' size ="5" face="Georgia, Arial"> El numero de gasolineras con la seleccion elegida es:</FONT>
+
+
+```{r count}
+numero<-ncol(params$n)
+print(numero)
+
+```
+
+<FONT COLOR ='firebrick' size ="5" face="Georgia, Arial">El carburante más caro cuesta: </FONT>
+```{r info}
+max_c <- max(params$n[5])
+max_c
+```
+
+<FONT COLOR ='firebrick' size ="5" face="Georgia, Arial">El carburante más barato cuesta:</FONT>
+```{r info_min}
+min_c <- min(params$n[5])
+min_c
+```
+
+## <FONT COLOR ='skyblue' size ="7" face="Georgia, Arial"> Histograma precios</FONT>
+```{r histograma}
+precios <- as.numeric(unlist(orden[5]))
+
+
+fig_h<- plot_ly(x = precios, type = "histogram")
+
+fig_h
+
+```
+
+## <FONT COLOR ='skyblue' size ="7" face="Georgia, Arial"> Lowcost  </FONT>
+```{r barplot}
+
+
+frecuencias<-params$n %>%group_by(params$n[6]) %>% summarise(Count = n()) %>%arrange(desc(Count))
+fig <-plot_ly(type='bar',x = frecuencias$low_cost, y = frecuencias$Count, textposition = 'outside', color = frecuencias$low_cost,colors = c("moccasin", "mediumseagreen") ,text=frecuencias$Count )
+fig
+```
+
+## <FONT COLOR ='skyblue' size ="7" face="Georgia, Arial"> Autoservicio  </FONT>
+```{r barplot2}
+
+frecuencias2<-params$n %>%group_by(params$n[9]) %>% summarise(Count = n()) %>%arrange(desc(Count))
+fig2 <-plot_ly(type='bar',x = frecuencias2$autoservicio, y = frecuencias2$Count, textposition = 'outside',color = frecuencias2$autoservicio,colors=c("Indianred1","lightslateblue"),text=frecuencias2$Count)
+fig2
+```
+
+## <FONT COLOR ='skyblue' size ="7" face="Georgia, Arial">  24h  </FONT>
+```{r barplot3}
+frecuencias3<-params$n %>%group_by(params$n[7]) %>% summarise(Count = n()) %>%arrange(desc(Count))
+fig3 <-plot_ly(type='bar',x = frecuencias3$si_24H, y = frecuencias3$Count,textposition = 'outside', color=frecuencias3$si_24H,colors=c("darkgreen", "darkorange"),text=frecuencias3$Count)
+fig3
+
+
+```
+
+## <FONT COLOR ='skyblue' size ="7" face="Georgia, Arial">  Municipios con más gasolineras</FONT>
+```{r pieplot}
+#mytable <- table(params$n[4])
+m<-params$n %>%group_by(params$n[4]) %>% summarise(Count = n()) %>%arrange(desc(Count))%>%
+  head(n = 10)
+pie <-plot_ly(type='pie',labels = m$municipio, values = m$Count, textposition = 'auto', sort = T)
+pie
+
+
+```
+
